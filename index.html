@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>EDUCC — Entry Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#1c2340; --ink-2:#2e3760; --paper:#f6f2e9; --paper-2:#efe8d8;
+    --line:#1c2340; --stamp-red:#a8311f; --stamp-green:#1f5e3d; --muted:#7a7560; --gold:#c79a3a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(28,35,64,0.06) 1px, transparent 1px) 0 0/22px 22px,
+      var(--paper);
+    color:var(--ink); font-family:'Inter',sans-serif;
+    min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+    padding:28px 16px 60px;
+  }
+  .app{ width:100%; max-width:420px; }
+  .masthead{ text-align:center; margin-bottom:22px; }
+  .masthead .eyebrow{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.22em; color:var(--muted); text-transform:uppercase; }
+  .masthead h1{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:42px; line-height:0.92; margin:4px 0 2px; letter-spacing:0.01em; }
+  .masthead .sub{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--ink-2); letter-spacing:0.03em; }
+
+  .ticket{
+    position:relative; background:var(--paper-2); border:2px solid var(--line); border-radius:4px;
+    box-shadow: 6px 6px 0 rgba(28,35,64,0.14); padding:26px 22px 22px; overflow:visible;
+  }
+  .ticket::before, .ticket::after{
+    content:""; position:absolute; width:22px; height:22px; background:var(--paper);
+    border:2px solid var(--line); border-radius:50%; top:50%; transform:translateY(-50%);
+  }
+  .ticket.no-notch::before, .ticket.no-notch::after{ display:none; }
+  .ticket::before{ left:-13px; } .ticket::after{ right:-13px; }
+
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .field input{
+    width:100%; font-family:'JetBrains Mono',monospace; font-size:18px; letter-spacing:0.04em;
+    padding:13px 14px; border:2px solid var(--line); border-radius:3px; background:var(--paper); color:var(--ink); outline:none;
+  }
+  .field input:focus{ box-shadow: 0 0 0 3px rgba(199,154,58,0.35); border-color:var(--gold); }
+  .hint{ font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4; }
+
+  .btn{
+    width:100%; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; letter-spacing:0.08em;
+    text-transform:uppercase; padding:15px 16px; border:2px solid var(--line); border-radius:3px;
+    background:var(--ink); color:var(--paper); cursor:pointer; transition:transform .08s ease;
+  }
+  .btn:active{ transform:translateY(2px); }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; }
+  .btn.secondary{ background:transparent; color:var(--ink); margin-top:10px; }
+  .btn.go{ background:var(--stamp-green); border-color:var(--stamp-green); color:#fdfaf1; }
+
+  .err{
+    background:#fbe9e6; border:2px solid var(--stamp-red); color:var(--stamp-red);
+    font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 14px; border-radius:3px; margin-bottom:14px; display:none;
+  }
+
+  .preview{ text-align:center; padding:6px 0 4px; }
+  .preview .tag{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); }
+  .preview .name{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:34px; line-height:1; margin:8px 0 10px; }
+  .preview .meta{ font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--ink-2); margin-bottom:18px; }
+  .preview .meta span{ color:var(--muted); }
+
+  .stampwrap{ text-align:center; padding:14px 0 6px; }
+  .stamp-circle{
+    width:140px; height:140px; margin:6px auto 18px; border-radius:50%; border:5px double currentColor;
+    display:flex; align-items:center; justify-content:center; transform:rotate(-9deg) scale(0.4); opacity:0;
+    animation: slam .42s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes slam{ 0%{transform:rotate(-9deg) scale(2.2);opacity:0;} 60%{transform:rotate(-9deg) scale(0.92);opacity:1;} 100%{transform:rotate(-9deg) scale(1);opacity:1;} }
+  .stamp-circle.ok{ color:var(--stamp-green); }
+  .stamp-circle.dupe{ color:var(--muted); }
+  .stamp-circle.bad{ color:var(--stamp-red); }
+  .stamp-circle .label{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:19px; letter-spacing:0.04em; line-height:1.05; }
+  .resultname{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:30px; margin-bottom:4px; }
+  .resultmeta{ font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--muted); margin-bottom:20px; }
+
+  .foot-link{ text-align:center; margin-top:22px; }
+  .foot-link button{ background:none; border:none; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; padding:8px; }
+
+  .admin-wrap{ display:none; }
+  .pin-box input{ text-align:center; letter-spacing:0.3em; }
+  .stats{ display:flex; gap:10px; margin-bottom:16px; }
+  .stat{ flex:1; border:2px solid var(--line); border-radius:3px; padding:12px 10px; text-align:center; background:var(--paper); }
+  .stat .n{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:28px; line-height:1; }
+  .stat .l{ font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-top:4px;}
+  .list{ max-height:340px; overflow-y:auto; border:2px solid var(--line); border-radius:3px; background:var(--paper); }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(28,35,64,0.14); font-size:13px; }
+  .row:last-child{ border-bottom:none; }
+  .row .rn{ font-weight:600; }
+  .row .rright{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .row .rt{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); white-space:nowrap; }
+  .row.absent .rn{ color:var(--muted); }
+  .row .cancel-btn{
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.04em; text-transform:uppercase;
+    color:var(--stamp-red); background:none; border:1.5px solid var(--stamp-red); border-radius:3px; padding:4px 7px; cursor:pointer; white-space:nowrap;
+  }
+  .refresh-line{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .refresh-line button{
+    background:none;border:2px solid var(--line); border-radius:3px; font-family:'JetBrains Mono',monospace; font-size:11px; padding:6px 10px; cursor:pointer;
+  }
+  .loading{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); text-align:center; padding:20px 0;}
+  .boot-err{
+    font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--stamp-red); text-align:center;
+    padding:16px; border:2px solid var(--stamp-red); border-radius:3px; background:#fbe9e6; margin-bottom:16px; display:none;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="masthead">
+    <div class="eyebrow">East Delta University · Computer Club</div>
+    <h1>ENTRY PASS</h1>
+    <div class="sub">Workshop 3 — Seminar Check-In</div>
+  </div>
+
+  <div class="boot-err" id="boot-err">Configuration missing — SUPABASE_URL / SUPABASE_ANON_KEY not set in the script. See setup instructions.</div>
+
+  <div id="screen-lookup">
+    <div class="ticket">
+      <div class="err" id="lookup-err"></div>
+      <div class="field">
+        <label for="idinput">Student ID or University Email</label>
+        <input id="idinput" type="text" inputmode="text" autocomplete="off" placeholder="233012112" autocapitalize="off" spellcheck="false">
+        <div class="hint">Enter your Student ID exactly as registered.</div>
+      </div>
+      <button class="btn go" id="btn-lookup">Check In</button>
+    </div>
+    <div class="foot-link"><button id="open-admin">Coordinator view</button></div>
+  </div>
+
+  <div id="screen-confirm" style="display:none;">
+    <div class="ticket">
+      <div class="preview">
+        <div class="tag">Is this you?</div>
+        <div class="name" id="cf-name">—</div>
+        <div class="meta"><span>Dept&nbsp;</span><span id="cf-dept">—</span> &nbsp;·&nbsp; <span>Semester&nbsp;</span><span id="cf-sem">—</span></div>
+      </div>
+      <button class="btn go" id="btn-confirm">Yes — confirm entry</button>
+      <button class="btn secondary" id="btn-deny">No, that's not me</button>
+    </div>
+  </div>
+
+  <div id="screen-success" style="display:none;">
+    <div class="ticket">
+      <div class="stampwrap">
+        <div class="stamp-circle ok"><div class="label">VERIFIED<br>ENTRY</div></div>
+        <div class="resultname" id="ok-name">—</div>
+        <div class="resultmeta" id="ok-meta">—</div>
+      </div>
+      <button class="btn" id="btn-done-ok">Done</button>
+    </div>
+  </div>
+
+  <div id="screen-dupe" style="display:none;">
+    <div class="ticket">
+      <div class="stampwrap">
+        <div class="stamp-circle dupe"><div class="label">ALREADY<br>ENTERED</div></div>
+        <div class="resultname" id="dupe-name">—</div>
+        <div class="resultmeta" id="dupe-meta">—</div>
+      </div>
+      <button class="btn secondary" id="btn-done-dupe">Back</button>
+    </div>
+  </div>
+
+  <div id="screen-notfound" style="display:none;">
+    <div class="ticket">
+      <div class="stampwrap">
+        <div class="stamp-circle bad"><div class="label">NOT ON<br>LIST</div></div>
+        <div class="resultmeta">No registration found for this ID. Double check what you entered, or see a coordinator at the desk.</div>
+      </div>
+      <button class="btn secondary" id="btn-done-notfound">Try again</button>
+    </div>
+  </div>
+
+  <div id="screen-error" style="display:none;">
+    <div class="ticket">
+      <div class="stampwrap">
+        <div class="resultmeta" id="err-msg">Couldn't reach the server. Check your connection and try again.</div>
+      </div>
+      <button class="btn secondary" id="btn-done-error">Try again</button>
+    </div>
+  </div>
+
+  <div class="admin-wrap" id="admin-wrap">
+    <div class="ticket no-notch" id="admin-pin-card">
+      <div class="field">
+        <label for="pininput">Coordinator PIN</label>
+        <input id="pininput" class="pin-box" type="password" inputmode="numeric" maxlength="6" placeholder="••••">
+      </div>
+      <button class="btn go" id="btn-pin">Unlock</button>
+    </div>
+
+    <div id="admin-dash" style="display:none;">
+      <div class="refresh-line">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">LIVE COUNT</span>
+        <button id="btn-refresh">↻ Refresh</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="n" id="st-in">0</div><div class="l">Checked In</div></div>
+        <div class="stat"><div class="n" id="st-total">0</div><div class="l">Registered</div></div>
+        <div class="stat"><div class="n" id="st-left">0</div><div class="l">Remaining</div></div>
+      </div>
+      <div class="list" id="admin-list"><div class="loading">Loading…</div></div>
+    </div>
+    <div class="foot-link"><button id="close-admin">Back to check-in</button></div>
+  </div>
+
+</div>
+
+<script>
+// ====== CONFIG — fill these in from Supabase: Project Settings → API ======
+const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+// ============================================================================
+
+let sb = null;
+if (SUPABASE_URL.includes("YOUR-PROJECT-REF") || SUPABASE_ANON_KEY.includes("YOUR-ANON")) {
+  document.getElementById('boot-err').style.display = "block";
+} else {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+function show(id){
+  ["screen-lookup","screen-confirm","screen-success","screen-dupe","screen-notfound","screen-error"].forEach(s=>{
+    document.getElementById(s).style.display = (s===id) ? "block" : "none";
+  });
+}
+
+let pending = null;
+let adminPin = null;
+
+const idinput = document.getElementById('idinput');
+const lookupErr = document.getElementById('lookup-err');
+
+document.getElementById('btn-lookup').addEventListener('click', doLookup);
+idinput.addEventListener('keydown', e => { if(e.key === "Enter") doLookup(); });
+
+async function doLookup(){
+  if(!sb) return;
+  lookupErr.style.display = "none";
+  const raw = idinput.value;
+  if(!raw.trim()){
+    lookupErr.textContent = "Enter your Student ID first.";
+    lookupErr.style.display = "block";
+    return;
+  }
+  const btn = document.getElementById('btn-lookup');
+  btn.disabled = true; btn.textContent = "Checking…";
+  const { data, error } = await sb.rpc('fn_lookup', { p_query: raw });
+  btn.disabled = false; btn.textContent = "Check In";
+
+  if(error){
+    document.getElementById('err-msg').textContent = "Couldn't reach the server. Check your connection and try again.";
+    show("screen-error");
+    return;
+  }
+  if(!data.found){
+    show("screen-notfound");
+    return;
+  }
+  pending = data;
+  if(data.alreadyIn){
+    document.getElementById('dupe-name').textContent = data.name;
+    document.getElementById('dupe-meta').textContent = "Already checked in at " + data.time;
+    show("screen-dupe");
+    return;
+  }
+  document.getElementById('cf-name').textContent = data.name;
+  document.getElementById('cf-dept').textContent = data.dept;
+  document.getElementById('cf-sem').textContent = data.sem;
+  show("screen-confirm");
+}
+
+document.getElementById('btn-deny').addEventListener('click', () => {
+  pending = null; idinput.value = ""; show("screen-lookup");
+  setTimeout(()=>idinput.focus(), 50);
+});
+
+document.getElementById('btn-confirm').addEventListener('click', async () => {
+  if(!pending || !sb) return;
+  const btn = document.getElementById('btn-confirm');
+  btn.disabled = true; btn.textContent = "Checking…";
+
+  const { data, error } = await sb.rpc('fn_checkin', { p_query: pending.id });
+  btn.disabled = false; btn.textContent = "Yes — confirm entry";
+
+  if(error){
+    document.getElementById('err-msg').textContent = "Couldn't reach the server. Check your connection and try again.";
+    show("screen-error");
+    return;
+  }
+  if(!data.ok){
+    if(data.reason === 'duplicate'){
+      document.getElementById('dupe-name').textContent = data.name;
+      document.getElementById('dupe-meta').textContent = "Already checked in at " + data.time;
+      show("screen-dupe");
+    } else {
+      document.getElementById('err-msg').textContent = "Could not find that ID anymore — try scanning again.";
+      show("screen-error");
+    }
+    return;
+  }
+  document.getElementById('ok-name').textContent = data.name;
+  document.getElementById('ok-meta').textContent = data.dept + " · Semester " + data.sem + " · " + data.time;
+  show("screen-success");
+});
+
+function resetToLookup(){
+  pending = null; idinput.value = ""; show("screen-lookup");
+  setTimeout(()=>idinput.focus(), 50);
+}
+document.getElementById('btn-done-ok').addEventListener('click', resetToLookup);
+document.getElementById('btn-done-dupe').addEventListener('click', resetToLookup);
+document.getElementById('btn-done-notfound').addEventListener('click', resetToLookup);
+document.getElementById('btn-done-error').addEventListener('click', resetToLookup);
+
+/* ---- Admin ---- */
+document.getElementById('open-admin').addEventListener('click', () => {
+  document.getElementById('screen-lookup').style.display = "none";
+  document.getElementById('admin-wrap').style.display = "block";
+});
+document.getElementById('close-admin').addEventListener('click', () => {
+  document.getElementById('admin-wrap').style.display = "none";
+  document.getElementById('admin-dash').style.display = "none";
+  document.getElementById('admin-pin-card').style.display = "block";
+  document.getElementById('pininput').value = "";
+  adminPin = null;
+  show("screen-lookup");
+});
+
+document.getElementById('btn-pin').addEventListener('click', async () => {
+  if(!sb) return;
+  const pin = document.getElementById('pininput').value;
+  const btn = document.getElementById('btn-pin');
+  btn.disabled = true; btn.textContent = "Checking…";
+  const { data, error } = await sb.rpc('fn_admin_summary', { p_pin: pin });
+  btn.disabled = false; btn.textContent = "Unlock";
+
+  if(error){
+    document.getElementById('pininput').placeholder = "connection error";
+    return;
+  }
+  if(data.ok){
+    adminPin = pin;
+    document.getElementById('admin-pin-card').style.display = "none";
+    document.getElementById('admin-dash').style.display = "block";
+    renderAdmin(data);
+  } else {
+    document.getElementById('pininput').value = "";
+    document.getElementById('pininput').placeholder = "wrong pin";
+  }
+});
+
+document.getElementById('btn-refresh').addEventListener('click', async () => {
+  if(!adminPin || !sb) return;
+  const listEl = document.getElementById('admin-list');
+  listEl.innerHTML = '<div class="loading">Loading…</div>';
+  const { data, error } = await sb.rpc('fn_admin_summary', { p_pin: adminPin });
+  if(!error && data.ok) renderAdmin(data);
+  else listEl.innerHTML = '<div class="loading">Connection error — try refresh again.</div>';
+});
+
+function renderAdmin(data){
+  document.getElementById('st-in').textContent = data.checkedIn;
+  document.getElementById('st-total').textContent = data.total;
+  document.getElementById('st-left').textContent = data.total - data.checkedIn;
+
+  const sorted = [...data.rows].sort((a,b)=>{
+    if(a.present && b.present) return 0;
+    if(a.present) return -1;
+    if(b.present) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const listEl = document.getElementById('admin-list');
+  listEl.innerHTML = "";
+  sorted.forEach(r => {
+    const row = document.createElement('div');
+    row.className = "row" + (r.present ? "" : " absent");
+    const rightContent = r.present
+      ? `<span class="rt">${r.time}</span><button class="cancel-btn" data-cancel-id="${r.id}">Cancel</button>`
+      : `<span class="rt">—</span>`;
+    row.innerHTML = `<span class="rn">${r.name}</span><span class="rright">${rightContent}</span>`;
+    listEl.appendChild(row);
+  });
+}
+
+document.getElementById('admin-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.cancel-btn');
+  if(!btn || !adminPin || !sb) return;
+  const sid = btn.getAttribute('data-cancel-id');
+  const name = btn.closest('.row').querySelector('.rn').textContent;
+
+  const ok = confirm(`Cancel attendance for ${name}? This removes their check-in and the live count drops by one.`);
+  if(!ok) return;
+
+  btn.disabled = true; btn.textContent = "…";
+  const { data, error } = await sb.rpc('fn_cancel', { p_id: sid, p_pin: adminPin });
+  if(error || !data.ok){
+    alert("Could not cancel — please try again.");
+  }
+  const fresh = await sb.rpc('fn_admin_summary', { p_pin: adminPin });
+  if(!fresh.error && fresh.data.ok) renderAdmin(fresh.data);
+});
+
+window.addEventListener('load', ()=> idinput.focus());
+</script>
+</body>
+</html>
