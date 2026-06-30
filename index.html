@@ -204,7 +204,10 @@
     <div id="admin-dash" style="display:none;">
       <div class="refresh-line">
         <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">LIVE COUNT</span>
-        <button id="btn-refresh">↻ Refresh</button>
+        <div style="display:flex; gap:6px;">
+          <button id="btn-export">↓ CSV</button>
+          <button id="btn-refresh">↻ Refresh</button>
+        </div>
       </div>
       <div class="stats">
         <div class="stat"><div class="n" id="st-in">0</div><div class="l">Checked In</div></div>
@@ -239,6 +242,7 @@ function show(id){
 
 let pending = null;
 let adminPin = null;
+let currentAdminData = null; // Store data for CSV export
 
 const idinput = document.getElementById('idinput');
 const lookupErr = document.getElementById('lookup-err');
@@ -336,6 +340,7 @@ document.getElementById('close-admin').addEventListener('click', () => {
   document.getElementById('admin-pin-card').style.display = "block";
   document.getElementById('pininput').value = "";
   adminPin = null;
+  currentAdminData = null;
   show("screen-lookup");
 });
 
@@ -371,7 +376,47 @@ document.getElementById('btn-refresh').addEventListener('click', async () => {
   else listEl.innerHTML = '<div class="loading">Connection error — try refresh again.</div>';
 });
 
+// CSV Export Logic
+document.getElementById('btn-export').addEventListener('click', () => {
+  if(!currentAdminData || !currentAdminData.rows || currentAdminData.rows.length === 0) {
+    alert("No data available to export.");
+    return;
+  }
+  
+  const rows = currentAdminData.rows;
+  // Automatically derive headers based on the properties of the first returned object
+  const headers = Object.keys(rows[0]);
+  
+  // Format CSV String
+  let csv = headers.join(",") + "\n";
+  
+  rows.forEach(r => {
+    const rowValues = headers.map(h => {
+      let val = r[h] === null || r[h] === undefined ? "" : String(r[h]);
+      // Escape inner quotes and wrap string containing commas/newlines in quotes
+      val = val.replace(/"/g, '""');
+      if(val.search(/("|,|\n)/g) >= 0) {
+        val = `"${val}"`;
+      }
+      return val;
+    });
+    csv += rowValues.join(",") + "\n";
+  });
+  
+  // Trigger file download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.setAttribute('download', 'Attendance_Export.csv');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
+
 function renderAdmin(data){
+  currentAdminData = data; // Save dataset for CSV exporter
+  
   document.getElementById('st-in').textContent = data.checkedIn;
   document.getElementById('st-total').textContent = data.total;
   document.getElementById('st-left').textContent = data.total - data.checkedIn;
